@@ -1,16 +1,36 @@
 function Module(rune)
 {
+  this.name = this.constructor.name.toLowerCase();
   this.rune = rune;
   this.element = null;
   this.settings  = {};
   this.methods  = {};
+  this.modes  = {};
   this.layer = null;
+  this.is_locked = false;
 
   this.docs = "Missing documentation.";
   
+  this.add_method = function(method)
+  {
+    method.host = this;
+    this.methods[method.name] = method;
+  }
+
+  this.add_setting = function(setting)
+  {
+    setting.host = this;
+    this.settings[setting.name] = setting;
+  }
+
+  this.add_mode = function(mode)
+  {
+    mode.host = this;
+    this.modes[mode.name] = mode;
+  }
+
   this.install = function()
   {
-    // console.log("Installing "+ronin.modules[this.rune].constructor.name);
   }
 
   this.context = function()
@@ -18,10 +38,11 @@ function Module(rune)
     return this.get_layer().context();
   }
 
-  this.create_layer = function()
+  this.create_layer = function(blink = false)
   {
     this.layer = new Layer(this.constructor.name+".Preview",this);
     this.layer.element.setAttribute("style","z-index:7000");
+    if(blink){ this.layer.blink(); }
     ronin.frame.add_layer(this.layer);
   }
 
@@ -30,47 +51,27 @@ function Module(rune)
     if(!this.layer){ this.create_layer(); this.layer.is_blinking = is_blinking }
     return this.layer;
   }
-
-  this.active = function(cmd)
-  {
-  }
   
-  this.passive = function(cmd)
+  this.hint = function(method)
   {
-  }
-  
-  this.update_setting = function(name,value)
-  {
-    this.settings[name] = value.content.join(" ");
-    ronin.terminal.log(new Log(this,"Updated setting: "+name+", to "+this.settings[name]));
-  }
+    var html = "";
 
-  this.add_method = function(method)
-  {
-    this.methods[method.name] = method;
-  }
-  
-  this.hint = function(content)
-  {
-    var s = "";
-
-    ronin.terminal.hint_element.innerHTML = "";
-
-    var method_name = content.split(" ")[0];
-
-    if(this.methods[method_name]){
-      s = this.methods[method_name].params;
-      s += this.methods[method_name].mouse_event ? " <i>"+this.methods[method_name].mouse_event+"</i> " : "";
+    if(method){
+      html += method;
     }
     else{
-      for(method in this.methods){
-        s += ".<b>"+method+"</b> ";
+      for(id in this.methods){
+        html += this.methods[id]+" ";
       }
-      for(setting in this.settings){
-        s += setting+"="+this.settings[setting]+" ";
+      for(id in this.settings){
+        html += this.settings[id]+" ";
+      }
+      for(mode in this.modes){
+        html += this.modes[mode]+" ";
       }
     }
-    return s;  
+
+    return html;
   }
 
   this.pad = function(input)
@@ -87,10 +88,25 @@ function Module(rune)
     return "";
   }
 
+  this.lock = function()
+  {
+    ronin.terminal.is_locked = true;
+  }
+
+  this.unlock = function()
+  {
+    ronin.terminal.is_locked = false;
+  }
+
   // Mouse
 
   this.mouse_mode = function()
   {
+    for(mode_id in this.modes){
+      if(!keyboard.shift_held && !keyboard.alt_held && !this.modes[mode_id].key){
+        return this.modes[mode_id].name;
+      }
+    }
     return null;
   }
 
@@ -119,6 +135,7 @@ function Module(rune)
 
   this.key_escape = function()
   { 
+    
   }
 
   this.key_delete = function()
@@ -141,5 +158,10 @@ function Module(rune)
 
   this.key_arrow_right = function()
   { 
+  }
+
+  this.toString = function()
+  {
+    return "<span class='module'>"+this.name+"</span>";
   }
 }

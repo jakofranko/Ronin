@@ -3,68 +3,76 @@ function Frame(rune)
   Module.call(this,rune);
   
   this.element = null;
-  this.settings = {"size":new Rect("200x200")};
+
+  this.size = new Rect("200x200");
 
   this.layers = {};
   this.active_layer = null;
   this.render_layer = null;
 
-  this.add_method(new Method("resize",[new Rect().name]));
-  this.add_method(new Method("crop",[new Position().name,new Rect().name]));
+  this.add_method(new Method("resize",[new Position().name,new Rect().name]));
   this.add_method(new Method("select",["text"]));
-
-  this.widget_element = document.createElement("widget");
+  this.add_mode(new Mode("resize"));
   
   this.install = function()
   {
-    this.element.appendChild(this.widget_element);
-    this.blink();
+    this.select(new Command("frame.select background"));
+
+    // Canvas
+    var starting_canvas = new Rect();
+    starting_canvas.width = window.innerWidth - 100;
+    starting_canvas.height = window.innerHeight - 100;
+
+    // Clamp
+
+    starting_canvas.width = parseInt(starting_canvas.width/40) * 40 - 40;
+    starting_canvas.height = parseInt(starting_canvas.height/40) * 40 - 40;
+
+    this.resize(new Command(starting_canvas.width+"x"+starting_canvas.height));
   }
 
   // Methods
 
-  this.resize = function(params, preview = false)
+  this.resize = function(cmd, preview = false)
   {
-    if(preview){ return; }
+    var rect = cmd.rect();
+    var position = cmd.position() ? cmd.position() : new Position(0,0);
 
-    this.settings["size"] = params.rect();
+    if(preview){ ronin.overlay.draw(position,rect); return; }
 
     for(layer_name in ronin.frame.layers){
-      ronin.frame.layers[layer_name].resize(this.settings["size"]);
+      ronin.frame.layers[layer_name].resize(rect);
     }
     
-    ronin.frame.element.width = this.settings["size"].width * 2;
-    ronin.frame.element.height = this.settings["size"].height * 2;
-    ronin.frame.element.style.width = this.settings["size"].width+"px";
-    ronin.frame.element.style.height = this.settings["size"].height+"px";
-    ronin.frame.element.style.marginLeft = -(this.settings["size"].width/2);
-    ronin.frame.element.style.marginTop = -(this.settings["size"].height/2);
+    ronin.frame.element.width = rect.width * 2;
+    ronin.frame.element.height = rect.height * 2;
+    ronin.frame.element.style.width = rect.width+"px";
+    ronin.frame.element.style.height = rect.height+"px";
+
+    ronin.frame.element.style.left = (window.innerWidth - rect.width)/2;
+    ronin.frame.element.style.top = (window.innerHeight - rect.height)/2;
 
     ronin.on_resize();
-    ronin.terminal.log(new Log(this,"Resized Surface to "+this.settings["size"].render()));
+
+    this.size = rect;
+
+    return 1, "Resized to "+this.size.toString();
   }
 
-  this.crop = function(params, preview = false)
-  {
-    if(!params.position() || !params.rect()){ return; }
-
-    this.settings["size"] = params.rect();
-
-    ronin.overlay.get_layer(true).clear();
-    if(preview){ronin.overlay.draw_rect(params.position(),params.rect());}
-  }
-
-  this.select = function(params, preview = false)
+  this.select = function(cmd, preview = false)
   {
     if(preview){ return; }
 
-    var layer_name = params.content;
+    var layer_name = cmd.values();
+
     if(!ronin.frame.layers[layer_name]){
       this.add_layer(new Layer(layer_name));
     }
     this.select_layer(this.layers[layer_name]);
     ronin.modules["layer"] = this.layers[layer_name];
     ronin.layer = this.layers[layer_name];
+
+    return 1, "Selected "+this.active_layer.name;
   }
 
   this.context = function()
@@ -82,96 +90,45 @@ function Frame(rune)
     setTimeout(function(){ ronin.frame.blink(); }, 30);
   }
 
-  this.select_layer = function(layer)
+  this.center = function()
   {
-    this.active_layer = layer;
+    ronin.frame.element.style.left = (window.innerWidth/2) - (ronin.frame.element.width/4);
+    ronin.frame.element.style.top = (window.innerHeight/2) - (ronin.frame.element.height/4) - 30;
   }
 
-  this.select_any_layer = function()
+  this.select_layer = function(layer)
   {
-    var layer_name = Object.keys(ronin.frame.layers)[0];
-    this.select_layer(ronin.frame.layers[layer_name]);    
+    if(!layer || layer.manager){ return; }
+    this.active_layer = layer;
   }
 
   this.add_layer = function(layer)
   {
-    ronin.terminal.log(new Log(this,"Creating layer:"+layer.name+(layer.manager ? "["+layer.manager.constructor.name+"]" : ""))); 
-
-    layer.resize(this.settings["size"]);
+    if(this.active_layer){layer.set_depth(this.active_layer.depth+1);}
+    layer.resize(this.size);
     this.layers[layer.name] = layer;
     this.element.appendChild(layer.element);
   }
 
-  this.widget = function()
-  {
-    if(!this.active_layer){ return ""; }
-
-    return this.rune+" "+this.settings["size"].render();
-  }
-
-  // Widget
-
-  this.update_widget = function()
-  {
-    if(!this.active_layer){ return; }
-
-    var s = "";
-    
-    s += "<span class='module'>";
-    for (var key in ronin.modules){
-      s += ronin.modules[key].widget() ? ronin.modules[key].widget()+" " : "";
-    }
-    s += "</span>";
-  
-    s += "<span class='cursor'>"+ronin.cursor.mode.mouse_mode()+"</span>";
-    
-    var keys = Object.keys(ronin.frame.layers);
-    var loc = keys.indexOf(this.active_layer.name);
-
-    if(keys.length > 1){
-      s += "<span class='layer'>"+ronin.frame.active_layer.widget()+"("+(loc+1)+"/"+keys.length+")</span>";
-    }
-    else{
-      s += "<span class='layer'>"+ronin.frame.active_layer.widget()+"</span>";
-    }
-  
-    this.widget_element.innerHTML = s;
-  }
-
   // Commands
 
-  this.layer_up = function()
+  this.layer_above = function()
   {
     var keys = Object.keys(ronin.frame.layers);
     var loc = keys.indexOf(this.active_layer.name);
 
     if(loc >= keys.length-1){ console.log("Reached end"); return false; }
 
-    if(keys[loc+1] != null){this.select_layer(ronin.frame.layers[keys[loc+1]]);}
+    if(keys[loc+1] != null){ return ronin.frame.layers[keys[loc+1]]; }
   }
 
-  this.layer_down = function()
+  this.layer_below = function()
   {
     var keys = Object.keys(ronin.frame.layers);
     var loc = keys.indexOf(this.active_layer.name);
 
-    if(keys[loc-1] != null){this.select_layer(ronin.frame.layers[keys[loc-1]]);}
+    if(keys[loc-1] != null){ return ronin.frame.layers[keys[loc-1]]; }
   }
-
-  // this.passive = function(cmd)
-  // { 
-  //   var crop = ronin.terminal.cmd().method("crop");
-
-  //   if(crop && crop.params.length == 2){
-  //     console.log(crop);  
-  //     ronin.overlay.get_layer(true).clear();
-  //     ronin.overlay.draw_rect(new Position(crop.params[0]),new Rect(crop.params[1]));
-  //   }
-  //   else{
-  //     console.log("Missing params")
-  //   }
-  //   ronin.terminal.update_hint();
-  // }
 
   // Cursor
 
@@ -182,17 +139,67 @@ function Frame(rune)
   
   this.mouse_down = function(position)
   {
-    ronin.overlay.get_layer(true).clear();
-    ronin.overlay.draw_pointer(position);
+    ronin.overlay.draw(position);
   }
-  
   this.mouse_move = function(position,rect)
-  {      
-    ronin.terminal.input_element.value = "frame."+ronin.terminal.method_name+" "+this.mouse_from.render()+" "+rect.render()+" ";
-    ronin.terminal.passive();
+  {
+    ronin.overlay.draw(this.mouse_from,rect);
   }
   
   this.mouse_up = function(position,rect)
   {
+    ronin.overlay.draw(this.mouse_from,rect)+" "+rect.toString();
+
+    var line = "frame.resize "+this.mouse_from.toString()+" "+rect.toString();
+    ronin.terminal.update(line);
+  }
+
+  this.widget = function()
+  {
+    var html = ""
+
+    html += this.size.toString()+" ";
+    html += this.active_layer.name+" ";
+
+    var user_layers = 0;
+    var managed_layers = 0;
+
+    count = 0;
+    for(id in this.layers){
+      if(this.layers[id].manager){
+        managed_layers += 1;
+      }
+      else{
+        user_layers += 1;
+      }
+      count += 1;
+    }
+
+    html += user_layers+"&"+managed_layers+" ";
+
+    html += this.widget_map()+" "
+
+    return html
+  }
+
+  this.widget_map = function()
+  {
+    html = ""
+    var keys = Object.keys(ronin.frame.layers);
+    var loc = keys.indexOf(this.active_layer.name);
+    i = 0;
+    while(i < keys.length){
+      if(i == loc){
+        html += "<span style='color:white'>|</span>";
+      }
+      else if(this.layers[keys[i]].manager){
+        html += "<span style='color:red'>|</span>";        
+      }
+      else{
+        html += "|";
+      }
+      i += 1;
+    }
+    return html;
   }
 }

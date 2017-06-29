@@ -1,16 +1,39 @@
-function Setting(key,value)
+function Setting(name,value)
 {
   Unit.call(this);
   
-  this.candidates = [];
-  this.key = key;
+  this.host = null;
+  this.name = name;
+  this.value = value;
   
-  if(value == "true"){ this.value = true; }
-  else if(value == "false"){ this.value = false; }
-  else{ this.value = value; }
-  
-  this.render = function()
+  this.toString = function()
   {
-    return this.key+"="+this.value;
+    return "?";
   }
+
+  this.toString = function()
+  {
+    return "<span class='setting'>:"+this.name+(this.value ? ' <span class="value">'+this.value+'</span>' : '')+"</span>"
+  }
+
+  this.update = function(value)
+  {
+    this.value = value;
+  }
+
+  this.to_f = function()
+  {
+    return parseFloat(this.value);
+  }
+
+  this.to_rect = function()
+  {
+    return new Rect(this.value);
+  }
+
+  this.to_pos = function()
+  {
+    return new Position(this.value);
+  }
+
 }

@@ -1,47 +1,60 @@
 function Path(rune)
 {
   Module.call(this,rune);
-  
-  this.parameters = [Any];
-  this.settings  = {"fill_color" : "#ff0000","line_width" : 1,"line_color" : "#ffffff", "line_cap" : "square"};
 
-  this.add_method(new Method("stroke",["Positions"],"Add point"));
-  this.add_method(new Method("fill",["Positions"]),"Add point");
+  this.add_mode(new Mode("stroke"));
+  this.add_mode(new Mode("arc","shift"));
+  this.add_mode(new Mode("arc_cc","alt"));
+  this.add_mode(new Mode("stem","shift_alt"));
+
+  this.add_setting(new Setting("fill_color","#ff0000"));
+  this.add_setting(new Setting("line_width","3"));
+  this.add_setting(new Setting("line_color","#ffffff"));
+  this.add_setting(new Setting("line_cap","square"));
+
+  this.add_method(new Method("stroke",["Positions"]));
+  this.add_method(new Method("fill",["Positions"]));
 
   this.coordinates = [];
   this.last_pos = null;
   this.paths = [];
 
-  this.stroke = function(params,preview = false)
+  this.stroke = function(cmd,preview = false)
   {
     if(!ronin.path.layer){ ronin.path.create_layer(); ronin.path.layer.is_blinking = true; }
-
-    ronin.terminal.log(new Log(this,"Stroke path!("+preview+")"));
 
     this.layer.clear();
 
     var context = preview ? this.context() : ronin.frame.context();
 
-    console.log(this.settings["line_width"]);
     context.beginPath();
-    context.lineCap = this.settings["line_cap"];
-    context.lineWidth = this.settings["line_width"];
-    context.strokeStyle = this.settings["line_color"];
-    context.stroke(new Path2D(params.content));
+    context.lineCap = this.settings["line_cap"].value;
+    context.lineWidth = this.settings["line_width"].value;
+    context.strokeStyle = this.settings["line_color"].value;
+    context.stroke(new Path2D(cmd.values()));
     context.closePath();
+
+    if(!preview){ this.coordinates = []; this.last_pos = null; if(!preview){ this.layer.remove(this); } }
+
+    return 1, preview ? "preview" : "ok";
   }
 
-  this.fill = function(params,preview = false)
+  this.fill = function(cmd,preview = false)
   {
     if(!ronin.path.layer){ ronin.path.create_layer(); ronin.path.layer.is_blinking = true; }
 
     this.layer.clear();
 
-    var target_layer = preview ? this.layer : ronin.frame.active_layer;
+    var context = preview ? this.context() : ronin.frame.context();
 
-    target_layer.context().fillStyle = this.settings["fill_color"];
+    context.beginPath();
+    context.fillStyle = this.settings["fill_color"].value;
+    context.fill(new Path2D(cmd.values()));
+    context.closePath();
 
-    target_layer.context().fill(new Path2D(params.content));
+    if(!preview){ this.coordinates = []; this.last_pos = null; }
+
+    return 1, preview ? "preview" : "ok";
   }
 
   // Tools
@@ -59,16 +72,10 @@ function Path(rune)
   this.create_svg = function()
   {
     var s = "";
-
-    s += "<svg width='"+ronin.frame.settings["size"].width+"' height='"+ronin.frame.settings["size"].height+"' xmlns='http://www.w3.org/2000/svg' baseProfile='full' version='1.1' style='fill:none;stroke:red;stroke-width:2px;stroke-linecap:square;'>";
-
     for (var i = 0; i < this.paths.length; i++) {
       s += "<path d='"+this.paths[i]+"' />";
     }
-
-    s += "</svg>";
-    console.log(s);
-    return s;
+    return "<svg width='"+ronin.frame.size.width+"' height='"+ronin.frame.size.height+"' xmlns='http://www.w3.org/2000/svg' baseProfile='full' version='1.1' style='fill:none;stroke:red;stroke-width:2px;stroke-linecap:square;'>"+s+"</svg>";
   }
 
   // Mouse
@@ -91,43 +98,46 @@ function Path(rune)
 
   this.mouse_down = function(position)
   {
-    ronin.terminal.input_element.value = "path."+ronin.terminal.method_name+" "+this.create_path();
-    ronin.terminal.input_element.value += "M"+position.render();
-    ronin.terminal.passive();
+    var method = ronin.terminal.cmd().method() ? ronin.terminal.cmd().method().name : "stroke";
+    var line = "path."+method+" "+this.create_path();
+    line += "M"+position.toString();
+    ronin.terminal.update(line);
   }
   
   this.mouse_move = function(position)
   {
-    ronin.terminal.input_element.value = "path."+ronin.terminal.method_name+" "+this.create_path();
-    ronin.terminal.input_element.value += "L"+position.render();
-    ronin.terminal.passive();
+    var method = ronin.terminal.cmd().method().name;
+    var line = "path."+method+" "+this.create_path();
+    line += "L"+position.toString();
+    ronin.terminal.update(line);
   }
   
   this.mouse_up = function(position)
   {
+    var method = ronin.terminal.cmd().method().name;
+
     if(this.coordinates.length == 0){
-      this.coordinates.push("M"+position.render());
+      this.coordinates.push("M"+position.toString());
     }
     else{
       var offset = this.last_pos ? position.offset(this.last_pos) : position;
 
       if(keyboard.shift_held == true && keyboard.alt_held == true){
-        this.coordinates.push("M"+position.render());
+        this.coordinates.push("M"+position.toString());
       }
       else if(keyboard.shift_held == true){
-        this.coordinates.push("a"+offset.render()+" 0 0,1 "+offset.render());
+        this.coordinates.push("a"+offset.toString()+" 0 0,1 "+offset.toString());
       }
       else if(keyboard.alt_held == true){
-       this.coordinates.push("a"+offset.render()+" 0 0,0 "+offset.render()); 
+       this.coordinates.push("a"+offset.toString()+" 0 0,0 "+offset.toString()); 
       }
       else{
-        this.coordinates.push("l"+offset.render());
+        this.coordinates.push("l"+offset.toString());
       }
     }
 
-    ronin.terminal.input_element.value = "path."+ronin.terminal.method_name+" "+this.create_path();
+    ronin.terminal.update("path."+method+" "+this.create_path());
     this.last_pos = position;
-    ronin.terminal.passive();
   }
 
   this.key_escape = function()
@@ -135,7 +145,5 @@ function Path(rune)
     if(this.layer){ this.layer.remove(this); }
     this.coordinates = [];
     this.last_pos = null;
-    ronin.terminal.input_element.value = "";
-    ronin.terminal.passive();
   }
 }

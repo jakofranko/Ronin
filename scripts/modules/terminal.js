@@ -1,237 +1,135 @@
 function Terminal(rune)
 {
-  Module.call(this,">");
+  Module.call(this);
 
-  this.element = null;
-  this.input_element = document.createElement("input");
-  this.hint_element = document.createElement("hint");
-  this.logs_element = document.createElement("logs");
-  this.menu_element = document.createElement("menu");
+  this.element = document.createElement("div");
+  this.input = document.createElement("input");
+  this.hint_element = document.createElement("div");
+  this.logs_element = document.createElement("div");
+  this.hint_element.id = "hint";
+  this.logs_element.id = "logs";
+  this.logs_element.innerHTML = "<log>Hello there</log>";
 
   this.history = [];
+  this.locks = [];
 
-  this.add_method(new Method("save",["text"]));
-  this.add_method(new Method("display",["mini/hide/full"]));
-
-  this.display = function(params,preview = false)
-  {
-    if(preview){ return; }
-    this.element.setAttribute("class",params.content);
-  }
+  this.add_method(new Method("load",["file_name.rin"]));
 
   // Module
   this.install = function(cmd)
   {
-    this.element.appendChild(this.input_element);
+    this.element.appendChild(this.input);
     this.element.appendChild(this.hint_element);
     this.element.appendChild(this.logs_element);
-    this.element.appendChild(this.menu_element);
-
-    this.hint_element.innerHTML = "_";
-
-    this.update_log();
+    
+    this.input.value = ""
+    this.hint_element.innerHTML = "";
   }
 
-  this.active = function(cmd)
+  this.run = function(target_cmd)
   {
+    var command = target_cmd ? target_cmd : this.cmd();
+    var module  = command.module();
+    var method  = command.method();
+    var setting = command.setting();
+
+    console.info(command.content); // Don't remove
+
+    if(method){
+      method.run(command);
+    }
+    if(setting){
+      module.settings[setting].update(command.values());
+      this.log(new Log(module,module.settings[setting]));
+    }
+    this.hint_element.innerHTML = "";
+    this.input.value = "";
+    this.update();
+  }
+
+  this.update = function(value = null, preview = true)
+  {
+    if(value){ this.input.value = value; this.input.focus(); }
+
+    var command = this.cmd();
+    var module  = command.module();
+    var method  = command.method();
+    var autocomplete = this.find_autocomplete(command,module,method);
+
+    if(method && preview){
+      method.preview(command);
+    }
+
+    this.hint_element.innerHTML = "<span class='input'>"+this.input.value+"</span>"+(autocomplete ? '<span class="autocomplete">'+autocomplete+'</span>' : '')+(this.input.value ? " > " : "")+(module ? module.hint(method) : ronin.hint(method));
+    ronin.cursor.update();
+  }
+
+  this.run_multi = function(lines)
+  {
+    lines = lines.split(";");
+    if(!ronin.terminal.is_locked){
+      target_line = lines.shift();
+      this.run(new Command(target_line));
+    }
+
+    if(lines.length > 0){ setTimeout(function(){ ronin.terminal.run_multi(lines.join(";")) }, 50); }
+  }
+
+  this.log = function(log)
+  {
+    this.logs_element.innerHTML = "";
+    this.logs_element.appendChild(log.element);
   }
 
   this.cmd = function()
   {
-    var content = this.input_element.value.trim();
-    var key = content[0];
-    var cmd = new Command(content.substring(1).trim().split(" "));
-    return cmd;
+    return new Command(this.input.value);
   }
 
-  // Queue
-
-  this.queue = [];
-  
-  this.query = function(input_str)
+  this.load = function(cmd,preview = false)
   {
-    this.input_element.value = "";
+    if(preview){ return; }
 
-    if(input_str.indexOf(";") > 0){
-      this.queue = input_str.split(";");
-    }
-    else{
-      this.queue = [];
-      this.queue.push(input_str)
-    }
-    this.run();
+    ronin.load(cmd.values());
+
+    return "Loading "+cmd.values();
   }
 
-  this.run = function()
+  this.find_autocomplete = function()
   {
-    if(!ronin.terminal.queue[0]){ console.log("Finished queue"); return; }
+    html = ""
 
-    console.info(ronin.terminal.queue[0]);
-    active(ronin.terminal.queue[0].trim());
-    ronin.terminal.queue.shift();
+    var entry = this.input.value;
+    var module = this.cmd().module();
+    var method = entry.indexOf(".") > -1 ? entry.split(".")[1] : null;
 
-    setTimeout(function(){ ronin.terminal.run(); }, 100);
-  }
+    if(entry.length == 0){ return null; }
 
-  function active(content)
-  {
-    ronin.terminal.log(new Log(ronin.terminal,content,"input"));
-
-    if(content.indexOf(".") > -1){
-      var module_name = content.split(" ")[0].split(".")[0]
-    }
-    else if(content.indexOf(":") > -1){
-      var module_name = content.split(" ")[0].split(":")[0]
-    }
-    else{
-      var module_name = content.split(" ")[0];
-    }
-
-    var method_name = content.indexOf(".") > -1 ? content.split(" ")[0].split(".")[1] : "default";
-    var setting_name = content.indexOf(":") > -1 ? content.split(" ")[0].split(":")[1] : null;
-
-    var parameters = content.split(" "); parameters.shift();
-    var parameters = new Command(parameters);
-
-    if(ronin[module_name] && ronin[module_name][method_name]){
-      ronin[module_name][method_name](parameters);
-    }
-    else if(ronin[module_name] && ronin[module_name].settings[setting_name]){
-      ronin[module_name].update_setting(setting_name,parameters);
-    }
-    else if(ronin["render"].collection[method_name]){
-      ronin["render"].collection[method_name].render(parameters);
-    }
-    else if(ronin[module_name]){
-      ronin.terminal.log(new Log(ronin.terminal,"Unknown method: "+method_name));
-    }
-    else{
-      ronin.terminal.log(new Log(ronin.terminal,"Unknown module: "+module_name));
-    }
-
-    // var key = content[0];
-    // var cmd = new Command(content.substring(1).trim().split(" "));
-
-    // if(ronin.modules[key]){
-    //   ronin.modules[key].update_settings(cmd);
-    //   ronin.modules[key].run_methods(cmd);
-    //   // ronin.modules[key].active(cmd);
-    //   ronin.terminal.history.push(content);
-    //   ronin.terminal.history_index = ronin.terminal.history.length-1;
-    //   ronin.terminal.update_menu();
-    // }
-    // else{
-    //   ronin.terminal.log(new Log(ronin.terminal,"Unknown module: "+key));
-    // }    
-  }
-  
-  this.module_name = null;
-  this.method_name = null;
-  this.method_params = null;
-
-  this.passive = function()
-  {
-    var content = this.input_element.value;
-    var parts = content.split(" ");
-    var key = parts.shift();
-
-    this.module_name   = key.split(".")[0];
-    this.method_name   = key.indexOf(".") > -1 ? key.split(".")[1] : null;
-    this.method_params = new Command(parts);
-
-    if(ronin[this.module_name]){
-      ronin.cursor.set_mode(ronin[this.module_name]);
-      if(ronin[this.module_name][this.method_name]){
-        ronin[this.module_name][this.method_name](this.method_params,true);
+    if(module && method){
+      for(id in module.methods){
+        if(method == module.methods[id].name){ break; }
+        if(method == module.methods[id].name.substr(0,method.length)){ return module.methods[id].name.replace(method,""); }
       }
     }
     else{
-      ronin.cursor.set_mode(ronin.brush);
+      for(id in ronin.modules){
+        if(entry == ronin.modules[id].name){ break; }
+        if(entry == ronin.modules[id].name.substr(0,entry.length)){ return ronin.modules[id].name.replace(entry,""); }
+      }
     }
-
-    this.hint(content);
-  }
-
-  // Hint
-
-  this.update_hint = function(content = this.input_element.value)
-  {
-    var module_name = content.indexOf(".") > -1 ? content.split(" ")[0].split(".")[0] : content.split(" ")[0];
-
-    if(ronin[module_name]){
-      this.hint_element.innerHTML = this.pad(content)+ronin[module_name].hint(content.replace(module_name+".",""));
-    }
-    else{
-      this.hint_element.innerHTML = this.pad(content)+ronin["default"].hint(content);
-    }
-  }
-
-  this.update_menu = function()
-  {
-    this.menu_element.innerHTML = ronin.terminal.history.length;
-  }
-
-  this.key_escape = function()
-  {
-    this.input_element.value = "";
-  }
-
-  this.key_arrow_up = function()
-  { 
-    this.history_index -= 1;
-
-    if(this.history_index < 0){ this.history_index = 0; }
-    
-    ronin.terminal.input_element.value = "> "+ronin.terminal.history[this.history_index];
-  }
-
-  this.key_arrow_down = function()
-  { 
-    this.history_index += 1;
-
-    if(this.history_index >= this.history.length){ this.history_index = this.history.length-1; }
-
-    ronin.terminal.input_element.value = "> "+ronin.terminal.history[this.history_index];
-  }
-
-  this.pad = function(input)
-  {
-    var s = "";
-    for (i = 0; i < input.length+1; i++){
-      s += "_";
-    }
-    return "<span style='color:#000'>"+s+"</span>";
-  }
-
-  //
-
-  this.logs = [];
-
-  this.log = function(log)
-  {
-    this.logs.push(log);
-  }
-
-  this.update_log = function()
-  {
-    if(ronin.terminal.logs[0]){
-      ronin.terminal.logs_element.appendChild(ronin.terminal.logs[0].element);
-      ronin.terminal.logs.shift();
-    }
-
-    setTimeout(function(){ ronin.terminal.update_log(); }, 200);
+    return null;
   }
 }
 
 // Log
 
-function Log(host,message,type = "default")
+function Log(host = null,message,error = false)
 {
   this.host = host;
   this.message = message;
-  this.type = type;
+  this.error = error;
   this.element = document.createElement("log");
-  this.element.setAttribute("class",type);
-  this.element.innerHTML = "<span class='rune'>"+(host.rune ? host.rune : ">")+"</span> "+message;
-  console.log(this.host.constructor.name,this.message)
+  this.element.setAttribute("class",error ? "error" : "okay");
+  this.element.innerHTML = "<span class='module'>"+(this.host ? this.host.name : "Ronin")+"</span> "+message;
+  console.log(this.host ? this.host.name : "Ronin",this.message);
 }

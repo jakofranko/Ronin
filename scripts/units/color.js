@@ -19,15 +19,21 @@ function Color(hex = '#000000')
   {
     return "rgba("+this.rgb().r+","+this.rgb().g+","+this.rgb().b+",1)";
   }
+
+  this.floats = function()
+  {
+    var rgb = this.rgb();
+    return { r:rgb.r/255, g:rgb.g/255, b:rgb.b/255 }
+  }
   
-  this.render = function()
+  this.toString = function()
   {
     return this.hex;
   }
   
   this.rgb_to_hex = function(rgb)
   {
-    return "#"+("0" + parseInt(rgb[0],10).toString(16)).slice(-2)+("0" + parseInt(rgb[1],10).toString(16)).slice(-2)+("0" + parseInt(rgb[2],10).toString(16)).slice(-2);
+    return "#"+parseInt(rgb.r,10).toString(16)+parseInt(rgb.g,10).toString(16)+parseInt(rgb.b,10).toString(16);
   }
 
   this.brightness = function()

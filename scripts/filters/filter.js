@@ -78,6 +78,16 @@ function Filter()
   
   this.pixels = function()
   {
-    return ronin.frame.context().getImageData(0,0,ronin.frame.settings["size"].width * 2,ronin.frame.settings["size"].height * 2);
+    return ronin.frame.context().getImageData(0,0,ronin.frame.size.width * 2,ronin.frame.size.height * 2);
+  }
+
+  this.hint = function()
+  {
+    var html = "";
+
+    for(id in this.parameters){
+      html += this.parameters[id]+" ";
+    }
+    return html;
   }
 }

@@ -6,25 +6,27 @@ function Filter_Stencil()
   this.render = function(cmd)
   {
     var angle = cmd.angle() ? cmd.angle().degrees : 20;
-    var color = cmd.color() ? cmd.color().hex : "#ffffff";
+    var color = cmd.color() ? cmd.color().hex : "#000000";
 
-    ronin.render.layer.clear();
     this.draw(ronin.frame.context(),angle,color);
+    if(ronin.render.layer){ ronin.render.layer.remove(this); }
+
+    return 1, "ok";
   }
 
   this.preview = function(cmd)
   {
     var angle = cmd.angle() ? cmd.angle().degrees : 20;
-    var color = cmd.color() ? cmd.color().hex : "#ffffff";
+    var color = cmd.color() ? cmd.color().hex : "#000000";
 
-    ronin.render.layer.clear();
+    ronin.render.get_layer().clear();
     this.draw(ronin.render.layer.context(),angle,color);
   }
 
   this.draw = function(context = this.context(), angle, color)
   {
-    var w = ronin.frame.settings["size"].width;
-    var h = ronin.frame.settings["size"].height;
+    var w = ronin.frame.size.width;
+    var h = ronin.frame.size.height;
     
     context.translate(w/2,h/2);
 

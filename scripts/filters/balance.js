@@ -4,44 +4,18 @@ function Filter_Balance()
   
   this.parameters = [Color];
 
-  this.render = function(cmd)
+  this.render = function(params)
   {
-    if(!cmd.color()){ return; }
-    if(!cmd.color().rgb()){ return; }
-
-    this.draw(ronin.frame.context(),cmd.color().rgb());
-  }
-
-  this.preview = function(cmd)
-  {
-    if(!cmd.color()){ return; }
-    if(!cmd.color().rgb()){ return; }
-
-    this.draw(ronin.render.layer.context(),cmd.color().rgb());
-  }
-
-  this.draw = function(context = this.context(), color_rgb)
-  {
-    var imageObj = new Image();
-    imageObj.src = ronin.frame.active_layer.element.toDataURL('image/png');
-
-    var w = ronin.frame.settings["size"].width;
-    var h = ronin.frame.settings["size"].height;
-
-    var originalData = ronin.frame.context().getImageData(0, 0, w*2, h*2);
+    var color = params.color() ? params.color().floats() : new Color("#999999").floats();
+    var originalData = ronin.frame.context().getImageData(0, 0, ronin.frame.size.width*2, ronin.frame.size.height*2);
     var data = originalData.data;
 
-    var r = (color_rgb.r / 255) + 0.5;
-    var g = (color_rgb.g / 255) + 0.5;
-    var b = (color_rgb.b / 255) + 0.5;
-
     for(var i = 0; i < data.length; i += 4) {
-      data[i]     = data[i] * r;
-      data[i + 1] = data[i + 1] * g;
-      data[i + 2] = data[i + 2] * b;
+      data[i]     = data[i] * (color.r + 0.5);
+      data[i + 1] = data[i + 1] * (color.g + 0.5);
+      data[i + 2] = data[i + 2] * (color.b + 0.5);
     }
 
-    ronin.render.layer.clear();
-    context.putImageData(originalData, 0, 0);
+    ronin.frame.context().putImageData(originalData, 0, 0);
   }
 }
